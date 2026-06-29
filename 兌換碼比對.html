@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>兌換碼比對工具</title>
+    <style>
+        :root {
+            --bg: #f5f5f5;
+            --box-bg: white;
+            --text: #333;
+            --border: #ddd;
+        }
+        .dark {
+            --bg: #1e1e1e;
+            --box-bg: #2d2d2d;
+            --text: #e0e0e0;
+            --border: #555;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            margin: 20px;
+            background: var(--bg);
+            color: var(--text);
+            transition: background 0.3s;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .box {
+            flex: 1;
+            background: var(--box-bg);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            padding: 15px;
+        }
+        textarea {
+            width: 100%;
+            height: 480px;
+            font-family: monospace;
+            font-size: 15px;
+            padding: 10px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            resize: vertical;
+        }
+        button {
+            padding: 12px 30px;
+            font-size: 16px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 15px 0;
+            transition: 0.3s;
+        }
+        button:hover {
+            background: #0055aa;
+        }
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--box-bg);
+            color: var(--text);
+            border: 2px solid var(--border);
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 100;
+        }
+        .result {
+            margin-top: 20px;
+            background: var(--box-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            color: var(--text);
+        }
+        .section { margin-bottom: 25px; }
+        .common { color: #ff6b6b; background: #4a1f1f; padding: 10px; border-radius: 6px; }
+        .internal { color: #ffb74d; background: #4a3a1f; padding: 10px; border-radius: 6px; }
+        .unique-left { color: #81d4fa; }
+        .unique-right { color: #a5d6a7; }
+        pre {
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" id="themeToggle">🌙</button>
+
+    <h1 style="text-align:center;">兌換碼比對工具</h1>
+    
+    <div class="container">
+        <div class="box">
+            <h3>已使用的兌換碼</h3>
+            <textarea id="left" placeholder="請在此貼上已使用過的兌換碼..."></textarea>
+        </div>
+        
+        <div class="box">
+            <h3>待檢查的兌換碼</h3>
+            <textarea id="right" placeholder="請在此貼上需要檢查的兌換碼..."></textarea>
+        </div>
+    </div>
+
+    <div style="text-align:center;">
+        <button onclick="compare()">🔍 開始比對</button>
+    </div>
+
+    <div class="result" id="result" style="display:none;">
+        <h3>比對結果</h3>
+        <div id="summary"></div>
+
+        <div class="section">
+            <h4>🔴 兩邊之間重複的行（已使用過）</h4>
+            <pre id="common" class="common"></pre>
+        </div>
+
+        <div class="section">
+            <h4>🟠 已使用列表內部重複</h4>
+            <pre id="internalLeft" class="internal"></pre>
+        </div>
+
+        <div class="section">
+            <h4>🟠 待檢查列表內部重複</h4>
+            <pre id="internalRight" class="internal"></pre>
+        </div>
+
+        <div class="section">
+            <h4>🔵 可使用（待檢查中獨特）</h4>
+            <pre id="uniqueRight" class="unique-right"></pre>
+        </div>
+
+        <div class="section">
+            <h4>🔵 已使用但不在待檢查列表中</h4>
+            <pre id="uniqueLeft" class="unique-left"></pre>
+        </div>
+    </div>
+
+    <script>
+        // 夜間模式
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+
+        function toggleTheme() {
+            body.classList.toggle('dark');
+            const isDark = body.classList.contains('dark');
+            themeToggle.textContent = isDark ? '☀️' : '🌙';
+            localStorage.setItem('darkMode', isDark);
+        }
+
+        if (localStorage.getItem('darkMode') === 'true') {
+            body.classList.add('dark');
+            themeToggle.textContent = '☀️';
+        }
+
+        themeToggle.addEventListener('click', toggleTheme);
+
+        // 比對功能
+        function compare() {
+            const leftText = document.getElementById('left').value;
+            const rightText = document.getElementById('right').value;
+            
+            if (!leftText.trim() || !rightText.trim()) {
+                alert('請在兩個框都輸入兌換碼！');
+                return;
+            }
+
+            const leftAll = leftText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            const leftCount = new Map();
+            leftAll.forEach(line => leftCount.set(line, (leftCount.get(line) || 0) + 1));
+            
+            const leftUniqueSet = new Set(leftAll);
+            const internalLeft = Array.from(leftCount.entries())
+                .filter(([_, count]) => count > 1)
+                .map(([line]) => line);
+
+            const rightAll = rightText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            const rightCount = new Map();
+            rightAll.forEach(line => rightCount.set(line, (rightCount.get(line) || 0) + 1));
+            
+            const rightUniqueSet = new Set(rightAll);
+            const internalRight = Array.from(rightCount.entries())
+                .filter(([_, count]) => count > 1)
+                .map(([line]) => line);
+
+            const common = [...leftUniqueSet].filter(line => rightUniqueSet.has(line));
+            const uniqueLeft = [...leftUniqueSet].filter(line => !rightUniqueSet.has(line));
+            const uniqueRight = [...rightUniqueSet].filter(line => !leftUniqueSet.has(line));
+
+            document.getElementById('result').style.display = 'block';
+
+            document.getElementById('summary').innerHTML = `
+                <strong>統計總結：</strong><br>
+                • 已使用列表： ${leftAll.length} 行（${leftUniqueSet.size} 種不同）<br>
+                • 待檢查列表： ${rightAll.length} 行（${rightUniqueSet.size} 種不同）<br>
+                • 重複（已使用）的兌換碼： <span style="color:#ff6b6b">${common.length}</span> 個<br>
+                • 已使用列表內部重複： <span style="color:#ffb74d">${internalLeft.length}</span> 種<br>
+                • 待檢查列表內部重複： <span style="color:#ffb74d">${internalRight.length}</span> 種<br>
+                • 可使用的兌換碼： <span style="color:#a5d6a7">${uniqueRight.length}</span> 個
+            `;
+
+            document.getElementById('common').textContent = common.length ? common.join('\n') : '（無重複的兌換碼）';
+            document.getElementById('internalLeft').textContent = internalLeft.length ? internalLeft.join('\n') : '（已使用列表無重複）';
+            document.getElementById('internalRight').textContent = internalRight.length ? internalRight.join('\n') : '（待檢查列表無重複）';
+            document.getElementById('uniqueLeft').textContent = uniqueLeft.length ? uniqueLeft.join('\n') : '（無此情況）';
+            document.getElementById('uniqueRight').textContent = uniqueRight.length ? uniqueRight.join('\n') : '（所有待檢查的兌換碼都已使用過）';
+        }
+    </script>
+</body>
+</html>
