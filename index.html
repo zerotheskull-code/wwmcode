@@ -128,7 +128,7 @@
         <div id="summary"></div>
 
         <div class="section">
-            <h4>🔴 兩邊之間重複的行（已使用過）</h4>
+            <h4>🔴 兩邊之間重複的行（已使用過，不分大小寫）</h4>
             <pre id="common" class="common"></pre>
         </div>
 
@@ -172,7 +172,7 @@
 
         themeToggle.addEventListener('click', toggleTheme);
 
-        // 比對功能
+        // 比對功能（已改為不區分大小寫）
         function compare() {
             const leftText = document.getElementById('left').value;
             const rightText = document.getElementById('right').value;
@@ -182,34 +182,62 @@
                 return;
             }
 
+            // 轉成小寫用於比對
+            const toLower = str => str.trim().toLowerCase();
+
+            // 左邊處理
             const leftAll = leftText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-            const leftCount = new Map();
-            leftAll.forEach(line => leftCount.set(line, (leftCount.get(line) || 0) + 1));
-            
-            const leftUniqueSet = new Set(leftAll);
-            const internalLeft = Array.from(leftCount.entries())
-                .filter(([_, count]) => count > 1)
-                .map(([line]) => line);
+            const leftLowerMap = new Map();   // 用於計數
+            const leftOriginalMap = new Map(); // 保留原始大小寫
 
+            leftAll.forEach(line => {
+                const lower = toLower(line);
+                leftLowerMap.set(lower, (leftLowerMap.get(lower) || 0) + 1);
+                if (!leftOriginalMap.has(lower)) {
+                    leftOriginalMap.set(lower, line); // 保留第一次出現的原始寫法
+                }
+            });
+
+            const internalLeft = Array.from(leftLowerMap.entries())
+                .filter(([_, count]) => count > 1)
+                .map(([lower]) => leftOriginalMap.get(lower));
+
+            // 右邊處理
             const rightAll = rightText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-            const rightCount = new Map();
-            rightAll.forEach(line => rightCount.set(line, (rightCount.get(line) || 0) + 1));
-            
-            const rightUniqueSet = new Set(rightAll);
-            const internalRight = Array.from(rightCount.entries())
+            const rightLowerMap = new Map();
+            const rightOriginalMap = new Map();
+
+            rightAll.forEach(line => {
+                const lower = toLower(line);
+                rightLowerMap.set(lower, (rightLowerMap.get(lower) || 0) + 1);
+                if (!rightOriginalMap.has(lower)) {
+                    rightOriginalMap.set(lower, line);
+                }
+            });
+
+            const internalRight = Array.from(rightLowerMap.entries())
                 .filter(([_, count]) => count > 1)
-                .map(([line]) => line);
+                .map(([lower]) => rightOriginalMap.get(lower));
 
-            const common = [...leftUniqueSet].filter(line => rightUniqueSet.has(line));
-            const uniqueLeft = [...leftUniqueSet].filter(line => !rightUniqueSet.has(line));
-            const uniqueRight = [...rightUniqueSet].filter(line => !leftUniqueSet.has(line));
+            // 兩邊之間重複
+            const commonLower = [...leftLowerMap.keys()].filter(lower => rightLowerMap.has(lower));
+            const common = commonLower.map(lower => leftOriginalMap.get(lower));
 
+            // 僅左邊
+            const uniqueLeftLower = [...leftLowerMap.keys()].filter(lower => !rightLowerMap.has(lower));
+            const uniqueLeft = uniqueLeftLower.map(lower => leftOriginalMap.get(lower));
+
+            // 僅右邊（可使用）
+            const uniqueRightLower = [...rightLowerMap.keys()].filter(lower => !leftLowerMap.has(lower));
+            const uniqueRight = uniqueRightLower.map(lower => rightOriginalMap.get(lower));
+
+            // 顯示結果
             document.getElementById('result').style.display = 'block';
 
             document.getElementById('summary').innerHTML = `
                 <strong>統計總結：</strong><br>
-                • 已使用列表： ${leftAll.length} 行（${leftUniqueSet.size} 種不同）<br>
-                • 待檢查列表： ${rightAll.length} 行（${rightUniqueSet.size} 種不同）<br>
+                • 已使用列表： ${leftAll.length} 行（${leftLowerMap.size} 種不同）<br>
+                • 待檢查列表： ${rightAll.length} 行（${rightLowerMap.size} 種不同）<br>
                 • 重複（已使用）的兌換碼： <span style="color:#ff6b6b">${common.length}</span> 個<br>
                 • 已使用列表內部重複： <span style="color:#ffb74d">${internalLeft.length}</span> 種<br>
                 • 待檢查列表內部重複： <span style="color:#ffb74d">${internalRight.length}</span> 種<br>
